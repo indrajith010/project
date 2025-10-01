@@ -1,0 +1,24 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
+    "users": {
+      ".read": "auth != null",
+      ".write": true,
+      "$uid": {
+        ".write": true,
+        ".validate": "newData.hasChildren(['email', 'name', 'role'])",
+        "role": {
+          ".validate": "newData.val() === 'admin' || newData.val() === 'user'"
+        }
+      }
+    },
+    "customers": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$customerId": {
+        ".validate": "newData.hasChildren(['name', 'email'])"
+      }
+    }
+  }
+}
