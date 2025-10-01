@@ -1,55 +1,39 @@
 import { useState, useEffect } from 'react';
-import { auth, db } from '../firebaseConfig';
-import { ref, get } from 'firebase/database';
-import { updateProfile } from 'firebase/auth';
-import { updateUser } from '../services/userService';
+import { usersAPI, type User } from '../api/api';
 import Button from '../components/ui/button';
 import Input from '../components/ui/input';
 
-interface UserData {
-  id: string;
-  email: string;
-  name: string;
-  role: 'admin' | 'user';
-  createdAt: number;
-}
-
 export default function ProfilePage() {
-  const [userData, setUserData] = useState<UserData | null>(null);
+  const [userData, setUserData] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editableData, setEditableData] = useState<Partial<UserData>>({});
+  const [editableData, setEditableData] = useState<Partial<User>>({});
 
   // Load user data
   useEffect(() => {
-    const fetchUserData = async () => {
+    const fetchUserData = () => {
       try {
-        const currentUser = auth.currentUser;
-        if (!currentUser) {
+        const authToken = localStorage.getItem('authToken');
+        const userDataStr = localStorage.getItem('user');
+        
+        if (!authToken || !userDataStr) {
           setError('You must be logged in to view this page');
           setLoading(false);
           return;
         }
 
-        const userRef = ref(db, `users/${currentUser.uid}`);
-        const snapshot = await get(userRef);
-        
-        if (snapshot.exists()) {
-          const data = snapshot.val() as UserData;
-          setUserData(data);
-          setEditableData({
-            name: data.name,
-            email: data.email
-          });
-        } else {
-          setError('Your user profile was not found in the database');
-        }
+        const data = JSON.parse(userDataStr) as User;
+        setUserData(data);
+        setEditableData({
+          username: data.username,
+          email: data.email
+        });
+        setLoading(false);
       } catch (err) {
         console.error("Error fetching user profile:", err);
-        setError(err instanceof Error ? err.message : 'Failed to load profile');
-      } finally {
+        setError('Failed to load profile');
         setLoading(false);
       }
     };
@@ -60,36 +44,28 @@ export default function ProfilePage() {
   // Handle profile update
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser || !userData) return;
+    if (!userData) return;
     
     try {
       setLoading(true);
       setError(null);
       setSuccess(null);
       
-      // Update profile in Firebase Auth
-      await updateProfile(auth.currentUser, {
-        displayName: editableData.name || userData.name
-      });
-      
-      // Update in Realtime Database
-      await updateUser(userData.id, {
-        name: editableData.name || userData.name,
+      // Update user via API
+      const updatedUser = await usersAPI.update(userData.id, {
+        username: editableData.username || userData.username,
         email: editableData.email || userData.email
       });
       
-      // Update local state
-      setUserData({
-        ...userData,
-        name: editableData.name || userData.name,
-        email: editableData.email || userData.email
-      });
+      // Update local state and localStorage
+      setUserData(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
       
       setSuccess('Profile updated successfully');
       setIsEditing(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error updating profile:", err);
-      setError(err instanceof Error ? err.message : 'Failed to update profile');
+      setError(err.response?.data?.message || 'Failed to update profile');
     } finally {
       setLoading(false);
     }
@@ -139,7 +115,7 @@ export default function ProfilePage() {
             <div className="space-y-6">
               <div className="flex items-center justify-between border-b pb-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-800">{userData.name}</h2>
+                  <h2 className="text-xl font-semibold text-gray-800">{userData.username}</h2>
                   <p className="text-gray-500 mt-1">{userData.email}</p>
                 </div>
                 <Button onClick={() => setIsEditing(true)}>
@@ -165,8 +141,24 @@ export default function ProfilePage() {
                   </p>
                 </div>
                 <div>
+                  <p className="text-sm font-medium text-gray-500">Status</p>
+                  <p className="mt-1">
+                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      userData.is_active 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {userData.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </p>
+                </div>
+                <div>
                   <p className="text-sm font-medium text-gray-500">Account Created</p>
-                  <p className="mt-1 text-gray-800">{new Date(userData.createdAt).toLocaleDateString()}</p>
+                  <p className="mt-1 text-gray-800">{new Date(userData.created_at).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Last Updated</p>
+                  <p className="mt-1 text-gray-800">{new Date(userData.updated_at).toLocaleDateString()}</p>
                 </div>
               </div>
             </div>
@@ -174,12 +166,12 @@ export default function ProfilePage() {
             <form onSubmit={handleUpdateProfile} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Name
+                  Username
                 </label>
                 <Input
                   type="text"
-                  value={editableData.name || ''}
-                  onChange={(e) => setEditableData({ ...editableData, name: e.target.value })}
+                  value={editableData.username || ''}
+                  onChange={(e) => setEditableData({ ...editableData, username: e.target.value })}
                   required
                   className="w-full"
                 />

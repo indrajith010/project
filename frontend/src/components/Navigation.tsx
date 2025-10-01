@@ -1,14 +1,19 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { auth, db } from "../firebaseConfig";
-import { ref, get } from "firebase/database";
-import { isAdmin } from "../services/userService";
-import { LogoutService } from "../services/logoutService";
+
+interface User {
+  id: number;
+  email: string;
+  username: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 export default function Navigation() {
   const navigate = useNavigate();
-  const [isAdminUser, setIsAdminUser] = useState(false);
-  const [userName, setUserName] = useState('');
+  const [user, setUser] = useState<User | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const location = useLocation();
 
@@ -47,54 +52,50 @@ export default function Navigation() {
     };
   }, [showUserMenu]);
 
-  // Ensure the admin status is checked when the user loads the page
+  // Check user authentication and role
   useEffect(() => {
-    const checkAdmin = async () => {
-      const user = auth.currentUser;
-      console.log("Current user in Navigation:", user ? user.uid : "No user");
-      
-      if (user) {
-        try {
-          // Add debug code to fetch the user data directly and see its contents
-          const userRef = ref(db, `users/${user.uid}`);
-          const snapshot = await get(userRef);
-          
-          console.log("User data exists in DB:", snapshot.exists());
-          if (snapshot.exists()) {
-            const userData = snapshot.val();
-            console.log("User data from DB:", userData);
-            console.log("User role:", userData.role);
-            setUserName(userData.name || user.displayName || user.email?.split('@')[0] || 'User');
-          }
-          
-          const adminStatus = await isAdmin(user.uid);
-          console.log("Admin status result:", adminStatus);
-          setIsAdminUser(adminStatus);
-          console.log("isAdminUser state set to:", adminStatus);
-        } catch (err) {
-          console.error("Error checking admin status:", err);
+    const checkUser = () => {
+      try {
+        const authToken = localStorage.getItem('authToken');
+        const userDataStr = localStorage.getItem('user');
+        
+        if (authToken && userDataStr) {
+          const userData = JSON.parse(userDataStr) as User;
+          console.log("Navigation - User data:", userData);
+          console.log("Navigation - User role:", userData.role);
+          setUser(userData);
+        } else {
+          console.log("Navigation - No authentication found");
+          setUser(null);
         }
+      } catch (error) {
+        console.error("Navigation - Error parsing user data:", error);
+        setUser(null);
       }
     };
     
-    checkAdmin();
+    checkUser();
     
-    // Also listen for auth state changes
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      console.log("Auth state changed. User:", user ? user.uid : "logged out");
-      if (user) {
-        checkAdmin();
-      } else {
-        setIsAdminUser(false);
+    // Listen for storage changes (login/logout in other tabs)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'authToken' || e.key === 'user') {
+        checkUser();
       }
-    });
+    };
     
-    return () => unsubscribe();
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  console.log("isAdminUser when building navItems:", isAdminUser);
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
+
+  const isAdminUser = user?.role === 'admin';
   const navItems = [...baseNavItems, ...(isAdminUser ? adminNavItems : [])];
-  console.log("navItems after build:", navItems);
+  const userName = user?.username || 'User';
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
@@ -176,31 +177,18 @@ export default function Navigation() {
                     
                     <div className="border-t border-gray-100 my-1"></div>
                     
-                    {/* Debug Options */}
-                    <Link
-                      to="/auth-debug"
-                      className="block px-4 py-2 text-sm text-gray-500 hover:bg-gray-100"
-                      role="menuitem"
-                      onClick={() => setShowUserMenu(false)}
-                    >
-                      Auth Debug
-                    </Link>
-                    
-                    <Link
-                      to="/debug-user"
-                      className="block px-4 py-2 text-sm text-gray-500 hover:bg-gray-100"
-                      role="menuitem"
-                      onClick={() => setShowUserMenu(false)}
-                    >
-                      Debug User
-                    </Link>
+                    {/* User Info */}
+                    <div className="px-4 py-2 text-xs text-gray-500">
+                      <div>Role: {user?.role}</div>
+                      <div>Email: {user?.email}</div>
+                    </div>
                     
                     <div className="border-t border-gray-100 my-1"></div>
                     
                     <button
-                      onClick={async () => {
+                      onClick={() => {
                         setShowUserMenu(false);
-                        await LogoutService.completeLogout(navigate);
+                        handleLogout();
                       }}
                       className="block w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-gray-100"
                       role="menuitem"

@@ -1,88 +1,97 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { auth, db } from '../firebaseConfig';
-import { onAuthStateChanged } from 'firebase/auth';
-import { ref, get } from 'firebase/database';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
 }
 
+interface User {
+  id: number;
+  email: string;
+  username: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   children, 
   requireAdmin = false 
 }) => {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const location = useLocation();
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-        console.log("ProtectedRoute auth state changed:", currentUser ? currentUser.uid : "No user");
-        setUser(currentUser);
+    const checkAuth = () => {
+      console.log("ProtectedRoute checking authentication...");
+      
+      try {
+        // Check for auth token and user data in localStorage
+        const authToken = localStorage.getItem('authToken');
+        const userDataStr = localStorage.getItem('user');
         
-        if (currentUser && requireAdmin) {
-          console.log("Checking admin status for", currentUser.uid, "requireAdmin:", requireAdmin);
-          try {
-            // Check if user has admin role from the users node in the database
-            const userRef = ref(db, `users/${currentUser.uid}`);
-            const snapshot = await get(userRef);
+        console.log("Auth token exists:", !!authToken);
+        console.log("User data exists:", !!userDataStr);
+        
+        if (authToken && userDataStr) {
+          const userData = JSON.parse(userDataStr) as User;
+          console.log("User data from localStorage:", userData);
+          console.log("User role:", userData.role);
+          console.log("User is active:", userData.is_active);
+          
+          if (userData.is_active) {
+            setUser(userData);
             
-            console.log("User data exists:", snapshot.exists());
-            
-            if (snapshot.exists()) {
-              const userData = snapshot.val();
-              console.log("User data from DB in ProtectedRoute:", userData);
-              console.log("User role in ProtectedRoute:", userData?.role);
-              const isAdminUser = userData?.role === 'admin';
-              console.log("Is admin user:", isAdminUser);
-              setIsAdmin(isAdminUser);
-              
-              // Save debug information
-              setDebugInfo({
-                userExists: !!currentUser,
-                userUid: currentUser.uid,
-                userEmail: currentUser.email,
-                requireAdmin,
-                userDataInDb: snapshot.exists(),
-                userData,
-                userRole: userData?.role,
-                isAdmin: isAdminUser
-              });
-            } else {
-              console.log("No user data found in database");
-              setIsAdmin(false);
-              
-              // Save debug information with error
-              setDebugInfo({
-                userExists: !!currentUser,
-                userUid: currentUser.uid,
-                userEmail: currentUser.email,
-                requireAdmin,
-                userDataInDb: snapshot.exists(),
-                error: "User exists in auth but not in database"
-              });
-            }
-          } catch (error: any) {
-            console.error("Error checking admin status:", error);
-            setIsAdmin(false);
-            
-            // Add error to debug information
+            // Save debug information
             setDebugInfo({
-              error: `Error checking admin status: ${error.message}`,
-              errorCode: error.code
+              hasToken: !!authToken,
+              userData: userData,
+              userRole: userData.role,
+              isActive: userData.is_active,
+              requireAdmin,
+              isAdmin: userData.role === 'admin',
+              accessGranted: !requireAdmin || userData.role === 'admin'
+            });
+          } else {
+            console.log("User account is inactive");
+            // Clear invalid session
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            setUser(null);
+            
+            setDebugInfo({
+              hasToken: !!authToken,
+              error: "User account is inactive",
+              userData: userData
             });
           }
+        } else {
+          console.log("No valid authentication found");
+          setUser(null);
+          
+          setDebugInfo({
+            hasToken: !!authToken,
+            hasUserData: !!userDataStr,
+            error: "No authentication token or user data found"
+          });
         }
+      } catch (error: any) {
+        console.error("Error checking authentication:", error);
+        // Clear potentially corrupted data
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        setUser(null);
         
-        setLoading(false);
-      });
+        setDebugInfo({
+          error: `Error parsing authentication data: ${error.message}`
+        });
+      }
       
-      return () => unsubscribe();
+      setLoading(false);
     };
     
     checkAuth();
@@ -102,7 +111,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // If admin access required but user is not admin
-  if (requireAdmin && !isAdmin) {
+  if (requireAdmin && user.role !== 'admin') {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4">
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md w-full">
@@ -118,8 +127,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             <h3 className="text-md font-medium text-red-800 mb-2">Troubleshooting Information:</h3>
             <ul className="text-sm text-red-700 list-disc pl-5 space-y-1">
               <li>User is logged in but doesn't have admin privileges</li>
-              <li>Ensure your user account has <code className="bg-gray-100 px-1 rounded">role: "admin"</code> in the Firebase database</li>
-              <li>Visit <a href="/auth-debug" className="underline">Auth Debug Page</a> to diagnose and fix this issue</li>
+              <li>Current role: <code className="bg-gray-100 px-1 rounded">{user.role}</code></li>
+              <li>Required role: <code className="bg-gray-100 px-1 rounded">admin</code></li>
+              <li>Contact an administrator to update your permissions</li>
             </ul>
           </div>
           
@@ -143,12 +153,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             >
               Go Back
             </button>
-            <a 
-              href="/auth-debug" 
-              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+            <button
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+              onClick={() => {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+              }}
             >
-              Debug Auth
-            </a>
+              Logout
+            </button>
           </div>
         </div>
       </div>

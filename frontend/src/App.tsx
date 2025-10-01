@@ -6,13 +6,13 @@ import AppLayout from "./components/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import EnhancedDashboardPage from "./pages/EnhancedDashboardPage";
 import ApiTestPage from "./pages/ApiTestPage";
-import CustomersManagementPageNew from "./pages/CustomersManagementPageNew";
-import BeautifulCustomerDetailPage from "./pages/BeautifulCustomerDetailPage";
-import BeautifulAddCustomerPage from "./pages/BeautifulAddCustomerPage";
-import BeautifulEditCustomerPage from "./pages/BeautifulEditCustomerPage";
-import LoginPage from "./pages/LoginPage";
+import ModernLoginPage from "./pages/ModernLoginPage";
+import ModernCustomersPage from "./pages/ModernCustomersPage";
+import ModernCustomerDetailPage from "./pages/ModernCustomerDetailPage";
+import ModernAddCustomerPage from "./pages/ModernAddCustomerPage";
+import ModernEditCustomerPage from "./pages/ModernEditCustomerPage";
+import ModernUsersPage from "./pages/ModernUsersPage";
 import SignupPage from "./pages/SignupPage";
-import UserManagementPage from "./pages/UserManagementPage";
 import DebugUserPage from "./pages/DebugUserPage";
 import AuthDebugPage from "./pages/AuthDebugPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -23,7 +23,7 @@ function App() {
       <ToastProvider>
         <Routes>
           {/* Public routes */}
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={<ModernLoginPage />} />
           <Route path="/setup-admin" element={<SignupPage />} />
           <Route path="/debug-user" element={<DebugUserPage />} />
           <Route path="/auth-debug" element={<AuthDebugPage />} />
@@ -56,7 +56,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <AppLayout>
-                  <CustomersManagementPageNew />
+                  <ModernCustomersPage />
                 </AppLayout>
               </ProtectedRoute>
             }
@@ -67,7 +67,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <AppLayout>
-                  <BeautifulCustomerDetailPage />
+                  <ModernCustomerDetailPage />
                 </AppLayout>
               </ProtectedRoute>
             }
@@ -78,7 +78,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <AppLayout>
-                  <BeautifulAddCustomerPage />
+                  <ModernAddCustomerPage />
                 </AppLayout>
               </ProtectedRoute>
             }
@@ -89,7 +89,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <AppLayout>
-                  <BeautifulEditCustomerPage />
+                  <ModernEditCustomerPage />
                 </AppLayout>
               </ProtectedRoute>
             }
@@ -113,7 +113,7 @@ function App() {
             element={
               <ProtectedRoute requireAdmin={true}>
                 <AppLayout>
-                  <UserManagementPage />
+                  <ModernUsersPage />
                 </AppLayout>
               </ProtectedRoute>
             }
